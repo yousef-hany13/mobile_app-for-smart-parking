@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, Alert, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { parking, booking } from '../services/api';
+import { parking, booking, wallet, notifications } from '../services/api';
 import { io } from 'socket.io-client';
 import { API_BASE_URL } from '../services/api';
 import QRCode from 'react-native-qrcode-svg';
@@ -11,6 +11,9 @@ export default function DashboardScreen({ navigation, route }) {
   const [occupancy, setOccupancy] = useState(null);
   const [myBookings, setMyBookings] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [walletBalance, setWalletBalance] = useState('0.00');
+  const [unreadNotifs, setUnreadNotifs] = useState(0);
+  const [extending, setExtending] = useState(false);
 
   const loadData = async () => {
     try {
@@ -23,6 +26,14 @@ export default function DashboardScreen({ navigation, route }) {
       if (u?.plate) {
         const bkRes = await booking.list(u.plate);
         setMyBookings(bkRes.data);
+        
+        try {
+          const wRes = await wallet.balance(u.plate);
+          setWalletBalance(wRes.data.balance.toFixed(2));
+          
+          const nRes = await notifications.list(u.plate);
+          setUnreadNotifs(nRes.data.unread_count || 0);
+        } catch (err) {}
       }
     } catch (e) {
       console.log('Error loading dash data', e);
@@ -74,21 +85,28 @@ export default function DashboardScreen({ navigation, route }) {
 
       {/* Action Grid */}
       <View style={styles.actionGrid}>
-        <View style={styles.actionItem}>
+        <TouchableOpacity style={styles.actionItem} onPress={() => navigation.navigate('Profile')}>
           <Text style={styles.actionIcon}>🚘</Text>
-          <Text style={styles.actionText}>سيارتي</Text>
+          <Text style={styles.actionText}>حسابي</Text>
           <Text style={styles.actionSub}>{user?.plate || '---'}</Text>
-        </View>
-        <View style={styles.actionItem}>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actionItem} onPress={() => navigation.navigate('History')}>
+          <Text style={styles.actionIcon}>📜</Text>
+          <Text style={styles.actionText}>السجل</Text>
+          <Text style={styles.actionSub}>زياراتي</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actionItem} onPress={() => navigation.navigate('Wallet')}>
           <Text style={styles.actionIcon}>💳</Text>
           <Text style={styles.actionText}>المحفظة</Text>
-          <Text style={styles.actionSub}>0.00 ج.م</Text>
-        </View>
-        <View style={styles.actionItem}>
+          <Text style={styles.actionSub}>{walletBalance} ج.م</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actionItem} onPress={() => navigation.navigate('Notifications')}>
           <Text style={styles.actionIcon}>🔔</Text>
           <Text style={styles.actionText}>التنبيهات</Text>
-          <Text style={styles.actionSub}>لا يوجد</Text>
-        </View>
+          <Text style={[styles.actionSub, unreadNotifs > 0 && {color: '#ef4444', fontWeight: 'bold'}]}>
+            {unreadNotifs > 0 ? `${unreadNotifs} جديد` : 'لا يوجد'}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {/* Live Occupancy Widget */}
@@ -144,6 +162,31 @@ export default function DashboardScreen({ navigation, route }) {
               <Text style={styles.bkTime}>⬇️ الوصول: {bk.arrive_time}</Text>
               <Text style={styles.bkTime}>⬆️ المغادرة: {bk.depart_time}</Text>
               <Text style={styles.bkPlate}>رقم الحجز: #{bk.id}</Text>
+              
+              <TouchableOpacity 
+                style={{marginTop: 10, padding: 8, backgroundColor: 'rgba(59,130,246,0.1)', borderRadius: 8, borderWidth: 1, borderColor: '#3b82f640', alignSelf: 'flex-start'}}
+                onPress={() => {
+                  Alert.alert('تمديد الحجز', 'هل تريد تمديد حجزك لمدة ساعة إضافية؟', [
+                    { text: 'إلغاء', style: 'cancel' },
+                    { text: 'نعم', onPress: async () => {
+                        setExtending(true);
+                        try {
+                          await booking.extend(bk.id, 1);
+                          Alert.alert('✅ تم', 'تم تمديد الحجز بنجاح');
+                          loadData();
+                        } catch(e) {
+                          Alert.alert('خطأ', e.response?.data?.msg || 'فشل التمديد');
+                        } finally {
+                          setExtending(false);
+                        }
+                      } 
+                    }
+                  ]);
+                }}
+                disabled={extending}
+              >
+                <Text style={{color: '#3b82f6', fontSize: 12, fontWeight: 'bold'}}>+ تمديد (1 ساعة)</Text>
+              </TouchableOpacity>
             </View>
             <View style={styles.qrContainer}>
               <QRCode value={`BOOKING|ID:${bk.id}|PLATE:${bk.plate}`} size={65} />
@@ -171,8 +214,8 @@ const styles = StyleSheet.create({
   name: { fontSize: 24, fontWeight: '900', color: '#fff' },
   logoutBtn: { paddingHorizontal: 15, paddingVertical: 8, backgroundColor: 'rgba(239, 68, 68, 0.1)', borderRadius: 20, borderWidth: 1, borderColor: '#ef444440' },
   
-  actionGrid: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 25 },
-  actionItem: { backgroundColor: '#1e293b', padding: 15, borderRadius: 15, width: '31%', alignItems: 'center', borderWidth: 1, borderColor: '#334155' },
+  actionGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 15 },
+  actionItem: { backgroundColor: '#1e293b', padding: 15, borderRadius: 15, width: '48%', alignItems: 'center', borderWidth: 1, borderColor: '#334155', marginBottom: 10 },
   actionIcon: { fontSize: 24, marginBottom: 5 },
   actionText: { color: '#cbd5e1', fontSize: 12, fontWeight: 'bold' },
   actionSub: { color: '#64748b', fontSize: 10, marginTop: 3 },

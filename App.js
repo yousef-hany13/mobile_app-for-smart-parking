@@ -79,6 +79,26 @@ export default function App() {
               component={BookingScreen} 
               options={{ title: 'تأكيد الحجز' }} 
             />
+            <Stack.Screen
+              name="History"
+              component={require('./src/screens/HistoryScreen').default}
+              options={{ title: 'سجل الزيارات' }}
+            />
+            <Stack.Screen
+              name="Profile"
+              component={require('./src/screens/ProfileScreen').default}
+              options={{ title: 'حسابي' }}
+            />
+            <Stack.Screen
+              name="Notifications"
+              component={require('./src/screens/NotificationsScreen').default}
+              options={{ title: 'التنبيهات' }}
+            />
+            <Stack.Screen
+              name="Wallet"
+              component={require('./src/screens/WalletScreen').default}
+              options={{ title: 'المحفظة' }}
+            />
           </>
         )}
       </Stack.Navigator>

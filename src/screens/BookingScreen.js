@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, ScrollView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { booking } from '../services/api';
+import { booking, parking } from '../services/api';
 
 export default function BookingScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
@@ -10,13 +10,19 @@ export default function BookingScreen({ navigation }) {
   // Custom Selection State
   const [selectedDay, setSelectedDay] = useState(0); // 0: Today, 1: Tomorrow, 2: Day after
   const [selectedHour, setSelectedHour] = useState(2); // Duration in hours
+  const [selectedFloor, setSelectedFloor] = useState(0); // 0 = Any floor
+  const [floors, setFloors] = useState([]);
 
   useEffect(() => {
-    const getUser = async () => {
+    const loadData = async () => {
       const u = JSON.parse(await AsyncStorage.getItem('user'));
       if (u?.plate) setUserPlate(u.plate);
+      try {
+        const res = await parking.getFloors();
+        setFloors(res.data || []);
+      } catch (err) {}
     };
-    getUser();
+    loadData();
   }, []);
 
   const handleBookNow = async () => {
@@ -37,6 +43,7 @@ export default function BookingScreen({ navigation }) {
         plate: userPlate,
         arrive: formatTime(arriveDate),
         depart: formatTime(departDate),
+        floor_pref: selectedFloor === 0 ? 1 : selectedFloor,
         source: 'Mobile'
       });
       
@@ -91,6 +98,26 @@ export default function BookingScreen({ navigation }) {
             onPress={() => setSelectedHour(hr)}
           >
             <Text style={[styles.pillText, selectedHour === hr && styles.pillTextActive]}>{hr} ساعة</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Floor Selection */}
+      <Text style={styles.sectionTitle}>اختيار الطابق</Text>
+      <View style={styles.grid}>
+        <TouchableOpacity 
+          style={[styles.gridPill, selectedFloor === 0 && styles.gridPillActive, { width: '48%' }]}
+          onPress={() => setSelectedFloor(0)}
+        >
+          <Text style={[styles.pillText, selectedFloor === 0 && styles.pillTextActive]}>أي طابق</Text>
+        </TouchableOpacity>
+        {floors.map(fl => (
+          <TouchableOpacity 
+            key={fl.floor} 
+            style={[styles.gridPill, selectedFloor === fl.floor && styles.gridPillActive, { width: '48%' }]}
+            onPress={() => setSelectedFloor(fl.floor)}
+          >
+            <Text style={[styles.pillText, selectedFloor === fl.floor && styles.pillTextActive]}>طابق {fl.floor}</Text>
           </TouchableOpacity>
         ))}
       </View>
